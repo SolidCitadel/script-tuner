@@ -10,25 +10,29 @@
 
 ```
 aip/
-├── scripttuner/             # 메인 Python 패키지 (예정)
-│   ├── preprocessing/       #   ① 파서 ② 정규화 ③ 재조립 ④ 역변환 ⑤ 통계
-│   ├── data_sources/        #   데이터셋 다운로더
-│   ├── diagnosis/           #   (미래) 진단 모듈
-│   ├── transform/           #   (미래) 변환 모델
-│   ├── api/                 #   (미래) 백엔드
-│   └── cli.py               #   CLI 진입점
-├── scripts/                 # 일회성 실행 스크립트
-├── tests/                   # 단위 테스트
-├── datasets/                # 원본 데이터 (gitignore, 다운로드 스크립트로 확보)
-├── data/                    # 파이프라인 산출물 (gitignore)
-├── docs/                    # 프로젝트 문서
-│   ├── status.md            #   진행 현황 (자주 업데이트)
-│   ├── design/              #   정적 설계 문서
-│   └── decisions/           #   ADR — 결정 이력
-├── background/              # 외부 자료 (제안서 등)
-├── .work/                   # 개인 작업 메모 (gitignore)
+├── scripttuner/                    # 메인 Python 패키지
+│   ├── cli.py                      #   CLI 진입점 (subcommands)
+│   ├── preprocessing/
+│   │   ├── ir.py                   #   공통 IR (Utterance, Monologue)
+│   │   ├── monologue.py            #   ③ Monologue 재조립
+│   │   └── chat/                   #   CHAT (CHILDES) 어댑터
+│   │       ├── parser.py           #     ① 파서
+│   │       └── cleaner.py          #     ② 정규화
+│   └── data_sources/
+│       └── sbcsae.py               #   SBCSAE 다운로더
+├── tests/                          # 단위 테스트
+├── datasets/                       # 원본 데이터 (gitignore, 다운로드 스크립트로 확보)
+├── data/                           # 파이프라인 산출물 (gitignore)
+├── docs/                           # 프로젝트 문서
+│   ├── status.md                   #   진행 현황 (자주 업데이트)
+│   ├── design/                     #   정적 설계 문서
+│   └── decisions/                  #   ADR — 결정 이력
+├── background/                     # 외부 자료 (제안서 등)
+├── .work/                          # 개인 작업 메모 (gitignore)
 └── pyproject.toml
 ```
+
+**아직 미생성 (계획)**: ④ LLM 역변환(`pairs.py`), ⑤ 통계(`stats.py`), 진단 모듈(`diagnosis/`), 변환 모델(`transform/`), 백엔드(`api/`). 진행도는 [`docs/status.md`](docs/status.md) 참조.
 
 ## 빠른 진입점
 
@@ -44,16 +48,22 @@ aip/
 
 본 프로젝트가 사용하는 1차 데이터셋은 **SBCSAE (Santa Barbara Corpus of Spoken American English)**, CC BY-ND 3.0 US 라이선스이다. 정책은 [ADR-0002](docs/decisions/0002-sbcsae-license-policy.md) 참조.
 
-- 원본 데이터는 git에 포함되지 않음 → 다운로드 스크립트로 확보 (구현 예정)
+- 원본 데이터는 git에 포함되지 않음 → `scripts/download_data.py`로 확보
 - 전처리 산출물은 ND 조항에 따라 공개 배포하지 않음
 
-## 환경 셋업 (예정)
+## 환경 셋업
+
+전제: Python 3.11+, [uv](https://docs.astral.sh/uv/) 설치 필요.
 
 ```bash
-# uv 기반 환경 (계획)
+# 1) 의존성 설치 (.venv 생성)
 uv sync
-uv run python scripts/download_data.py sbcsae
-uv run python -m scripttuner.cli preprocess datasets/sbcsae/SBC016.cha
-```
 
-상세 구현은 진행 중이다. [`docs/status.md`](docs/status.md) 참조.
+# 2) SBCSAE 데이터셋 다운로드 (60개 .cha → datasets/sbcsae/)
+uv run scripttuner download sbcsae
+
+# 3) 테스트 / 린트 / 타입체크
+uv run pytest
+uv run ruff check .
+uv run mypy scripttuner tests scripts
+```
