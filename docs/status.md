@@ -2,28 +2,18 @@
 
 > 본 문서는 **상태 추적용**이다. 일상적으로 업데이트한다. 정적 설계는 `docs/design/`, 결정 이력은 `docs/decisions/`(ADR), 거친 작업 메모는 `.work/`(gitignore)에 둔다.
 
-마지막 업데이트: 2026-05-23 (M12 완료 — SBC016 PoC end-to-end 단일 명령 검증)
+마지막 업데이트: 2026-05-23
 
 ---
 
 ## 마일스톤
 
+**M0~M12: PoC 전처리 파이프라인 완료** ✅
+SBC016 한 파일에 대해 `scripttuner run sbcsae SBC016` (parse → clean → monologue → pairs → stats) 단일 명령으로 end-to-end 검증. 자세한 진행 이력은 `git log` 및 아래 ADR 목록 참조.
+
 | # | 마일스톤 | 상태 | 비고 |
 |---|---|---|---|
-| M0 | 제안서 확정 | ✅ 완료 | `background/QAIP_proposal_report.md` |
-| M1 | 데이터셋 1차 검토 | ✅ 완료 | SBC016.cha → SBCSAE 전체 확보 |
-| M2 | 전처리 파이프라인 설계 | ✅ 완료 | `docs/design/preprocessing_pipeline.md` |
-| M3 | 프로젝트 구조 및 라이선스 정책 | ✅ 완료 | ADR-0002 |
-| M4 | 패키지 골격 + uv 환경 구축 | ✅ 완료 | `scripttuner/`, `pyproject.toml`, ruff/mypy/pytest |
-| M5 | SBCSAE 다운로더 구현 | ✅ 완료 | `scripttuner/data_sources/sbcsae.py`, 60개 CHA 확보 |
-| M6 | 모듈 ① CHA 파서 구현 + 테스트 | ✅ 완료 | `scripttuner/preprocessing/chat/parser.py` + 공통 IR |
-| M7 | 모듈 ② 정규화(Cleaner) | ✅ 완료 | `scripttuner/preprocessing/chat/cleaner.py` (vowel lengthening 포함) |
-| M8 | 모듈 ③ Monologue 재조립 | ✅ 완료 | `scripttuner/preprocessing/monologue.py` |
-| M9 | JSONL 디스크 적재 + CLI 서브커맨드 | ✅ 완료 | `scripttuner/persistence/jsonl.py`, parse/clean/monologue 서브커맨드 |
-| M10 | 모듈 ④ LLM 역변환 (pairs) | ✅ 완료 | `scripttuner/preprocessing/pairs.py`, `scripttuner/llm/openai_compatible.py`, `persistence/cache.py`. SBC016 46건 실 API 검증 완료. ADR-0007, ADR-0008 |
-| M11 | 모듈 ⑤ 통계 산출 | ✅ 완료 | `scripttuner/preprocessing/stats.py` + `stats` CLI. POS 지표는 spacy `en_core_web_sm` |
-| M12 | SBC016.cha PoC End-to-End | ✅ 완료 | `scripttuner run sbcsae SBC016` — parse → clean → monologue → pairs → stats |
-| M13 | SBCSAE 60개 확장 적용 | ⏳ 대기 | 한 corpus의 모든 .cha를 배치 처리 |
+| M13 | SBCSAE 60개 확장 적용 | ⏳ 대기 | 한 corpus의 모든 .cha 배치 처리. 비용/시간/rate limit 정책 검토 |
 | — | 진단 모듈 / 변환 모델 / 백엔드 / UI | 미정 | 본 PoC 이후 |
 
 ## 결정 이력 (ADR)

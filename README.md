@@ -55,7 +55,7 @@ aip/
 
 본 프로젝트가 사용하는 1차 데이터셋은 **SBCSAE (Santa Barbara Corpus of Spoken American English)**, CC BY-ND 3.0 US 라이선스이다. 정책은 [ADR-0002](docs/decisions/0002-sbcsae-license-policy.md) 참조.
 
-- 원본 데이터는 git에 포함되지 않음 → `scripts/download_data.py`로 확보
+- 원본 데이터는 git에 포함되지 않음 → `uv run scripttuner download sbcsae`로 확보
 - 전처리 산출물은 ND 조항에 따라 공개 배포하지 않음
 
 ## 환경 셋업
@@ -86,7 +86,7 @@ uv run ruff check .
 uv run mypy scripttuner tests
 ```
 
-### spaCy 영어 모델 (M11 stats POS 지표용)
+### spaCy 영어 모델 (stats 모듈의 POS 지표용)
 
 ```bash
 uv run python -m spacy download en_core_web_sm
