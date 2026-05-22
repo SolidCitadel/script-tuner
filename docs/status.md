@@ -2,7 +2,7 @@
 
 > 본 문서는 **상태 추적용**이다. 일상적으로 업데이트한다. 정적 설계는 `docs/design/`, 결정 이력은 `docs/decisions/`(ADR), 거친 작업 메모는 `.work/`(gitignore)에 둔다.
 
-마지막 업데이트: 2026-05-23 (M10 완료 — SBC016 1파일 LLM 역변환 end-to-end)
+마지막 업데이트: 2026-05-23 (M11 완료 — SBC016 1파일 통계 산출까지 검증)
 
 ---
 
@@ -21,8 +21,8 @@
 | M8 | 모듈 ③ Monologue 재조립 | ✅ 완료 | `scripttuner/preprocessing/monologue.py` |
 | M9 | JSONL 디스크 적재 + CLI 서브커맨드 | ✅ 완료 | `scripttuner/persistence/jsonl.py`, parse/clean/monologue 서브커맨드 |
 | M10 | 모듈 ④ LLM 역변환 (pairs) | ✅ 완료 | `scripttuner/preprocessing/pairs.py`, `scripttuner/llm/openai_compatible.py`, `persistence/cache.py`. SBC016 46건 실 API 검증 완료. ADR-0007, ADR-0008 |
-| M11 | 모듈 ⑤ 통계 산출 | ⏳ 대기 | `scripttuner/preprocessing/stats.py` |
-| M12 | SBC016.cha PoC End-to-End | ⏳ 대기 | 전 모듈 통합 검증 (현재 M10까지 SBC016 단일 파일 검증됨) |
+| M11 | 모듈 ⑤ 통계 산출 | ✅ 완료 | `scripttuner/preprocessing/stats.py` + `stats` CLI. POS 지표는 spacy `en_core_web_sm` |
+| M12 | SBC016.cha PoC End-to-End | ⏳ 대기 | download → parse → clean → monologue → pairs → stats 통합 스크립트 |
 | M13 | SBCSAE 60개 확장 적용 | ⏳ 대기 | |
 | — | 진단 모듈 / 변환 모델 / 백엔드 / UI | 미정 | 본 PoC 이후 |
 
@@ -39,8 +39,8 @@
 
 ## 다음 액션 (단기)
 
-1. **M11 통계 산출 모듈** (`scripttuner/preprocessing/stats.py`) — pair 길이 분포, 필러/pause 빈도, 어휘 밀도 등
-2. **M12 PoC End-to-End** — SBC016 한 파일 기준 download → parse → clean → monologue → pairs → stats 전체 통합 검증
+1. **M12 PoC End-to-End** — SBC016 한 파일 기준 download → parse → clean → monologue → pairs → stats 단일 명령으로 묶기 (e.g. `scripttuner run sbcsae SBC016`) 또는 README run-through로 문서화
+2. **M13 SBCSAE 60개 확장** — 한 번에 60파일 배치 처리 인터페이스
 
 ## 보류 / 추후 결정
 

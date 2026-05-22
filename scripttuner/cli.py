@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import sys
 from pathlib import Path
@@ -27,13 +28,14 @@ from scripttuner.llm.openai_compatible import OpenAICompatibleClient
 from scripttuner.persistence.jsonl import read_jsonl, write_jsonl
 from scripttuner.preprocessing.chat import cleaner as chat_cleaner
 from scripttuner.preprocessing.chat import parser as chat_parser
-from scripttuner.preprocessing.ir import Monologue, Utterance
+from scripttuner.preprocessing.ir import Monologue, Pair, Utterance
 from scripttuner.preprocessing.monologue import DEFAULT_MIN_TOKENS, build_monologues
 from scripttuner.preprocessing.pairs import (
     DEFAULT_PROMPT_VERSION,
     DEFAULT_STYLE,
     convert_to_formal,
 )
+from scripttuner.preprocessing.stats import compute_stats
 
 DEFAULT_DATASETS_DIR = Path("datasets")
 DEFAULT_DATA_DIR = Path("data")
@@ -158,6 +160,23 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Process only the first N monologues (default: all).",
     )
 
+    st = subparsers.add_parser(
+        "stats", help="Compute aggregate statistics over Pair JSONL."
+    )
+    st.add_argument("corpus", choices=sorted(CORPORA), help="Corpus name (resolves source dir).")
+    st.add_argument("stem", help="File stem (e.g. SBC016).")
+    st.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help=f"Base data directory (default: {DEFAULT_DATA_DIR}).",
+    )
+    st.add_argument(
+        "--no-pos",
+        action="store_true",
+        help="Skip POS-based stats (lexical density, phrasal verbs).",
+    )
+
     return parser
 
 
@@ -245,12 +264,25 @@ def _run_pairs(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_stats(args: argparse.Namespace) -> int:
+    source = _source_name(args.corpus)
+    in_path = args.data_dir / "pairs" / source / f"{args.stem}.jsonl"
+    pairs = read_jsonl(in_path, Pair)
+    result = compute_stats(pairs, include_pos=not args.no_pos)
+    out_path = args.data_dir / "stats" / source / f"{args.stem}.json"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"OK: wrote stats for {result['n_pairs']} pairs to {out_path}")
+    return 0
+
+
 _COMMANDS = {
     "download": _run_download,
     "parse": _run_parse,
     "clean": _run_clean,
     "monologue": _run_monologue,
     "pairs": _run_pairs,
+    "stats": _run_stats,
 }
 
 

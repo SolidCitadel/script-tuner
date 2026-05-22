@@ -21,6 +21,7 @@ aip/
 │   │   ├── ir.py                   #   공통 IR (Utterance, Monologue, Pair)
 │   │   ├── monologue.py            #   ③ Monologue 재조립
 │   │   ├── pairs.py                #   ④ LLM 역변환 (구어체→문어체)
+│   │   ├── stats.py                #   ⑤ Pair 집계 통계
 │   │   └── chat/                   #   CHAT (CHILDES) 어댑터
 │   │       ├── parser.py           #     ① 파서
 │   │       └── cleaner.py          #     ② 정규화
@@ -38,7 +39,7 @@ aip/
 └── pyproject.toml
 ```
 
-**아직 미생성 (계획)**: ⑤ 통계(`stats.py`), 진단 모듈(`diagnosis/`), 변환 모델(`transform/`), 백엔드(`api/`). 진행도는 [`docs/status.md`](docs/status.md) 참조.
+**아직 미생성 (계획)**: 진단 모듈(`diagnosis/`), 변환 모델(`transform/`), 백엔드(`api/`). 진행도는 [`docs/status.md`](docs/status.md) 참조.
 
 ## 빠른 진입점
 
@@ -80,13 +81,24 @@ uv run scripttuner monologue sbcsae SBC016
 uv run scripttuner pairs sbcsae SBC016 --model <provider/model-slug>
 # → data/pairs/SBCSAE/SBC016.jsonl
 
-# 5) 테스트 / 린트 / 타입체크
+# 5) 통계 산출 (POS 지표는 spacy 모델 필요 — 아래 참조)
+uv run scripttuner stats sbcsae SBC016
+# → data/stats/SBCSAE/SBC016.json
+# (POS 없이: uv run scripttuner stats sbcsae SBC016 --no-pos)
+
+# 6) 테스트 / 린트 / 타입체크
 uv run pytest
 uv run ruff check .
 uv run mypy scripttuner tests
 ```
 
-### LLM provider 설정 (M9.2 pairs)
+### spaCy 영어 모델 (M11 stats POS 지표용)
+
+```bash
+uv run python -m spacy download en_core_web_sm
+```
+
+### LLM provider 설정
 
 `.env.example`을 `.env`로 복사 후 값 채움 (`.env`는 gitignore됨):
 
@@ -95,5 +107,3 @@ OPENAI_API_KEY=<your-key>
 OPENAI_BASE_URL=<provider-endpoint>
 # LLM_MODEL=<model-slug>   # 선택; CLI --model로도 가능
 ```
-
-OpenAI SDK가 자동 인식하는 표준 변수명이므로 provider 락인 없음. OpenAI 호환 endpoint면 어떤 backend(OpenAI, OpenRouter, Together, Groq, 로컬 vLLM 등)든 같은 두 변수만으로 동작.

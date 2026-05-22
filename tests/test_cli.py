@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from scripttuner import cli
-from scripttuner.persistence.jsonl import read_jsonl
+from scripttuner.persistence.jsonl import read_jsonl, write_jsonl
 from scripttuner.preprocessing.ir import Monologue, Pair, Utterance
 
 
@@ -110,8 +111,6 @@ class _FakeOpenAIClient:
 
 
 def _write_monologues(path: Path, monos: list[Monologue]) -> None:
-    from scripttuner.persistence.jsonl import write_jsonl
-
     write_jsonl(path, monos)
 
 
@@ -198,3 +197,50 @@ def test_pairs_subcommand_requires_model(
         ]
     )
     assert rc == 2
+
+
+def test_stats_subcommand_writes_json(tmp_path: Path) -> None:
+    data_dir = tmp_path / "data"
+    pairs_path = data_dir / "pairs" / "SBCSAE" / "SBC016.jsonl"
+    write_jsonl(
+        pairs_path,
+        [
+            Pair(
+                pair_id="SBC016#mono_0001#casual#v1",
+                source="SBCSAE",
+                style="casual",
+                speaker="TAMM",
+                spoken_text="<pause:short> um well hello <pause:long> world",
+                formal_text="Hello, world.",
+                monologue_id="SBC016#mono_0001",
+            ),
+            Pair(
+                pair_id="SBC016#mono_0002#casual#v1",
+                source="SBCSAE",
+                style="casual",
+                speaker="BRAD",
+                spoken_text="another monologue here",
+                formal_text="another monologue here",
+                monologue_id="SBC016#mono_0002",
+            ),
+        ],
+    )
+
+    rc = cli.main(
+        ["stats", "sbcsae", "SBC016", "--data-dir", str(data_dir), "--no-pos"]
+    )
+    assert rc == 0
+    out_path = data_dir / "stats" / "SBCSAE" / "SBC016.json"
+    assert out_path.exists()
+
+    result = json.loads(out_path.read_text(encoding="utf-8"))
+    assert result["n_pairs"] == 2
+    assert result["n_unique_speakers"] == 2
+    assert set(result["speakers"]) == {"TAMM", "BRAD"}
+    # pause counts
+    assert result["spoken"]["pause_short_per_pair"]["max"] == 1.0
+    assert result["spoken"]["pause_long_per_pair"]["max"] == 1.0
+    # filler "um well" = 2 in pair 1; 0 in pair 2 → max 2
+    assert result["spoken"]["fillers_per_pair"]["max"] == 2.0
+    # --no-pos suppresses lexical_density
+    assert "lexical_density" not in result["spoken"]

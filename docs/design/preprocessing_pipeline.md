@@ -76,7 +76,8 @@ scripttuner/
    ▼ pairs/*.jsonl
    │
 ⑤ 통계 / 검증 (stats.py) — 코퍼스 무관
-   - 페어 수, 길이 분포, 어휘 밀도, 구동사 비율, 필러 빈도, 포즈 빈도
+   - 카운트, 길이 분포, 사전 기반(filler/pause), POS 기반(어휘 밀도/구동사 비율)
+   - 입력: pair JSONL  출력: 파일당 단일 JSON
    - 진단 모듈의 ground truth로 활용
    │
    ▼ stats/*.json
@@ -180,6 +181,42 @@ JSON 예시:
 ```
 
 단순 페어 단위 메트릭(spoken/formal 토큰 수, 필러 빈도, pause 빈도 등)은 모듈 ⑤ Stats에서 별도 산출한다.
+
+## 통계 출력 스키마 (모듈 ⑤ 산출물)
+
+파일당 단일 JSON (`data/stats/<SOURCE>/<stem>.json`). 분포는 `{min, max, mean, median}` 객체.
+
+```json
+{
+  "source": "SBCSAE",
+  "n_pairs": 46,
+  "n_unique_speakers": 2,
+  "speakers": ["BRAD", "TAMM"],
+  "spoken": {
+    "tokens": {...},
+    "fillers_per_pair": {...},
+    "pause_short_per_pair": {...},
+    "pause_long_per_pair": {...},
+    "lexical_density": {...},
+    "phrasal_verb_ratio": {...}
+  },
+  "formal": {
+    "tokens": {...},
+    "fillers_per_pair": {...},
+    "lexical_density": {...},
+    "phrasal_verb_ratio": {...}
+  },
+  "reduction_ratio": {...}
+}
+```
+
+- **filler**: 단일어(`um, uh, well, like`) + 이중어(`you know, i mean, kind of, sort of`)
+- **pause**: spoken_text의 `<pause:short>` / `<pause:long>` 카운트 (formal엔 부재)
+- **lexical_density**: 내용어(NOUN/PROPN/VERB/ADJ/ADV) / 알파벳 토큰
+- **phrasal_verb_ratio**: phrasal verb (verb + `prt` dep) / 전체 verb 수
+- **reduction_ratio**: formal_tokens / spoken_tokens (페어별)
+
+POS 기반 지표는 spacy(`en_core_web_sm`)에 의존. CLI에 `--no-pos`로 비활성화 가능. spacy 모델 설치는 `uv run python -m spacy download en_core_web_sm`.
 
 ## 향후 확장
 
