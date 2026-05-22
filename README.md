@@ -69,24 +69,18 @@ uv sync
 # 2) SBCSAE 데이터셋 다운로드 (60개 .cha → datasets/sbcsae/)
 uv run scripttuner download sbcsae
 
-# 3) 전처리 파이프라인 — 한 파일에 대해 단계별 실행
+# 3) 한 파일 end-to-end (parse → clean → monologue → pairs → stats)
+uv run scripttuner run sbcsae SBC016
+# → data/{parsed,cleaned,monologues,pairs,stats}/SBCSAE/SBC016.*
+
+# 또는 단계별로 실행
 uv run scripttuner parse sbcsae datasets/sbcsae/SBC016.cha
-# → data/parsed/SBCSAE/SBC016.jsonl
 uv run scripttuner clean sbcsae SBC016
-# → data/cleaned/SBCSAE/SBC016.jsonl
 uv run scripttuner monologue sbcsae SBC016
-# → data/monologues/SBCSAE/SBC016.jsonl
+uv run scripttuner pairs sbcsae SBC016 --model <provider/model-slug>   # .env 필요
+uv run scripttuner stats sbcsae SBC016                                  # spacy 모델 필요
 
-# 4) LLM 역변환 (.env 설정 필요)
-uv run scripttuner pairs sbcsae SBC016 --model <provider/model-slug>
-# → data/pairs/SBCSAE/SBC016.jsonl
-
-# 5) 통계 산출 (POS 지표는 spacy 모델 필요 — 아래 참조)
-uv run scripttuner stats sbcsae SBC016
-# → data/stats/SBCSAE/SBC016.json
-# (POS 없이: uv run scripttuner stats sbcsae SBC016 --no-pos)
-
-# 6) 테스트 / 린트 / 타입체크
+# 4) 테스트 / 린트 / 타입체크
 uv run pytest
 uv run ruff check .
 uv run mypy scripttuner tests

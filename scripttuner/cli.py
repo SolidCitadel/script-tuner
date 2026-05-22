@@ -177,6 +177,36 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip POS-based stats (lexical density, phrasal verbs).",
     )
 
+    rn = subparsers.add_parser(
+        "run",
+        help="End-to-end pipeline for one file: parse > clean > monologue > pairs > stats.",
+    )
+    rn.add_argument("corpus", choices=sorted(CORPORA), help="Corpus name.")
+    rn.add_argument("stem", help="File stem (e.g. SBC016).")
+    rn.add_argument(
+        "--datasets-dir",
+        type=Path,
+        default=DEFAULT_DATASETS_DIR,
+        help=f"Source .cha directory (default: {DEFAULT_DATASETS_DIR}).",
+    )
+    rn.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help=f"Base data directory (default: {DEFAULT_DATA_DIR}).",
+    )
+    rn.add_argument(
+        "--model",
+        default=os.environ.get("LLM_MODEL"),
+        help="LLM model slug (required unless LLM_MODEL env is set).",
+    )
+    rn.add_argument("--min-tokens", type=int, default=DEFAULT_MIN_TOKENS)
+    rn.add_argument("--limit", type=int, default=None, help="Limit pairs to first N monologues.")
+    rn.add_argument("--no-progress", action="store_true")
+    rn.add_argument("--no-cache", action="store_true")
+    rn.add_argument("--max-retries", type=int, default=3)
+    rn.add_argument("--no-pos", action="store_true", help="Skip POS-based stats.")
+
     return parser
 
 
@@ -276,6 +306,54 @@ def _run_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_run(args: argparse.Namespace) -> int:
+    """End-to-end pipeline orchestrator. Reuses per-stage _run_* via argparse.Namespace."""
+    source = _source_name(args.corpus)
+    cha_path = args.datasets_dir / args.corpus / f"{args.stem}.cha"
+    if not cha_path.exists():
+        print(
+            f"error: input not found: {cha_path}\n"
+            f"hint: run `scripttuner download {args.corpus}` first.",
+            file=sys.stderr,
+        )
+        return 1
+
+    base: dict[str, object] = {"corpus": args.corpus, "data_dir": args.data_dir}
+
+    stages: list[tuple[str, dict[str, object]]] = [
+        ("parse", {**base, "input_path": cha_path}),
+        ("clean", {**base, "stem": args.stem}),
+        ("monologue", {**base, "stem": args.stem, "min_tokens": args.min_tokens}),
+        (
+            "pairs",
+            {
+                **base,
+                "stem": args.stem,
+                "model": args.model,
+                "style": DEFAULT_STYLE,
+                "prompt_version": DEFAULT_PROMPT_VERSION,
+                "cache_dir": None,
+                "no_cache": args.no_cache,
+                "no_progress": args.no_progress,
+                "max_retries": args.max_retries,
+                "limit": args.limit,
+            },
+        ),
+        ("stats", {**base, "stem": args.stem, "no_pos": args.no_pos}),
+    ]
+    for name, kwargs in stages:
+        print(f"[run] {name} {args.corpus} {args.stem}", file=sys.stderr)
+        rc = _COMMANDS[name](argparse.Namespace(**kwargs))
+        if rc != 0:
+            print(f"[run] {name} failed with rc={rc}", file=sys.stderr)
+            return rc
+    print(
+        f"[run] complete: data/stats/{source}/{args.stem}.json",
+        file=sys.stderr,
+    )
+    return 0
+
+
 _COMMANDS = {
     "download": _run_download,
     "parse": _run_parse,
@@ -283,6 +361,7 @@ _COMMANDS = {
     "monologue": _run_monologue,
     "pairs": _run_pairs,
     "stats": _run_stats,
+    "run": _run_run,
 }
 
 

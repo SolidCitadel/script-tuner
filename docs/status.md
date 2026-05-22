@@ -2,7 +2,7 @@
 
 > 본 문서는 **상태 추적용**이다. 일상적으로 업데이트한다. 정적 설계는 `docs/design/`, 결정 이력은 `docs/decisions/`(ADR), 거친 작업 메모는 `.work/`(gitignore)에 둔다.
 
-마지막 업데이트: 2026-05-23 (M11 완료 — SBC016 1파일 통계 산출까지 검증)
+마지막 업데이트: 2026-05-23 (M12 완료 — SBC016 PoC end-to-end 단일 명령 검증)
 
 ---
 
@@ -22,8 +22,8 @@
 | M9 | JSONL 디스크 적재 + CLI 서브커맨드 | ✅ 완료 | `scripttuner/persistence/jsonl.py`, parse/clean/monologue 서브커맨드 |
 | M10 | 모듈 ④ LLM 역변환 (pairs) | ✅ 완료 | `scripttuner/preprocessing/pairs.py`, `scripttuner/llm/openai_compatible.py`, `persistence/cache.py`. SBC016 46건 실 API 검증 완료. ADR-0007, ADR-0008 |
 | M11 | 모듈 ⑤ 통계 산출 | ✅ 완료 | `scripttuner/preprocessing/stats.py` + `stats` CLI. POS 지표는 spacy `en_core_web_sm` |
-| M12 | SBC016.cha PoC End-to-End | ⏳ 대기 | download → parse → clean → monologue → pairs → stats 통합 스크립트 |
-| M13 | SBCSAE 60개 확장 적용 | ⏳ 대기 | |
+| M12 | SBC016.cha PoC End-to-End | ✅ 완료 | `scripttuner run sbcsae SBC016` — parse → clean → monologue → pairs → stats |
+| M13 | SBCSAE 60개 확장 적용 | ⏳ 대기 | 한 corpus의 모든 .cha를 배치 처리 |
 | — | 진단 모듈 / 변환 모델 / 백엔드 / UI | 미정 | 본 PoC 이후 |
 
 ## 결정 이력 (ADR)
@@ -39,8 +39,8 @@
 
 ## 다음 액션 (단기)
 
-1. **M12 PoC End-to-End** — SBC016 한 파일 기준 download → parse → clean → monologue → pairs → stats 단일 명령으로 묶기 (e.g. `scripttuner run sbcsae SBC016`) 또는 README run-through로 문서화
-2. **M13 SBCSAE 60개 확장** — 한 번에 60파일 배치 처리 인터페이스
+1. **M13 SBCSAE 60개 확장** — 60파일 배치 처리. 비용·시간·실패 처리 (skip + 재시도 정책) 검토 필요. PoC 단계의 한계 (rate limit, 단일 worker) 그대로 둘지 결정.
+2. 본격 학습/모델 단계로 전환 — 변환 모델 베이스 선택, 진단 모듈, 학습 파이프라인.
 
 ## 보류 / 추후 결정
 

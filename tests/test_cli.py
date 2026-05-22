@@ -199,6 +199,68 @@ def test_pairs_subcommand_requires_model(
     assert rc == 2
 
 
+def test_run_subcommand_end_to_end(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(cli, "OpenAICompatibleClient", _FakeOpenAIClient)
+
+    datasets_dir = tmp_path / "datasets"
+    sbcsae_dir = datasets_dir / "sbcsae"
+    sbcsae_dir.mkdir(parents=True)
+    cha_path = sbcsae_dir / "SBC016.cha"
+    cha_path.write_text(SAMPLE_CHA, encoding="utf-8")
+    data_dir = tmp_path / "data"
+
+    rc = cli.main(
+        [
+            "run",
+            "sbcsae",
+            "SBC016",
+            "--datasets-dir",
+            str(datasets_dir),
+            "--data-dir",
+            str(data_dir),
+            "--model",
+            "fake/model",
+            "--min-tokens",
+            "5",
+            "--no-progress",
+            "--no-pos",
+        ]
+    )
+    assert rc == 0
+
+    # all stage outputs present
+    assert (data_dir / "parsed" / "SBCSAE" / "SBC016.jsonl").exists()
+    assert (data_dir / "cleaned" / "SBCSAE" / "SBC016.jsonl").exists()
+    assert (data_dir / "monologues" / "SBCSAE" / "SBC016.jsonl").exists()
+    assert (data_dir / "pairs" / "SBCSAE" / "SBC016.jsonl").exists()
+    stats_path = data_dir / "stats" / "SBCSAE" / "SBC016.json"
+    assert stats_path.exists()
+    result = json.loads(stats_path.read_text(encoding="utf-8"))
+    assert result["source"] == "SBCSAE"
+    assert result["n_pairs"] >= 1
+
+
+def test_run_subcommand_missing_input(tmp_path: Path) -> None:
+    rc = cli.main(
+        [
+            "run",
+            "sbcsae",
+            "NOTHERE",
+            "--datasets-dir",
+            str(tmp_path / "datasets"),
+            "--data-dir",
+            str(tmp_path / "data"),
+            "--model",
+            "fake/model",
+            "--no-progress",
+            "--no-pos",
+        ]
+    )
+    assert rc == 1
+
+
 def test_stats_subcommand_writes_json(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     pairs_path = data_dir / "pairs" / "SBCSAE" / "SBC016.jsonl"
