@@ -69,9 +69,11 @@ uv sync
 # 2) SBCSAE 데이터셋 다운로드 (60개 .cha → datasets/sbcsae/)
 uv run scripttuner download sbcsae
 
-# 3) 한 파일 end-to-end (parse → clean → monologue → pairs → stats)
-uv run scripttuner run sbcsae SBC016
-# → data/{parsed,cleaned,monologues,pairs,stats}/SBCSAE/SBC016.*
+# 3) end-to-end (parse → clean → monologue → pairs → stats)
+uv run scripttuner run sbcsae SBC016                  # 단일 파일
+uv run scripttuner run sbcsae SBC016 SBC017 SBC018    # 여러 파일
+uv run scripttuner run sbcsae --all                   # corpus 전체
+# → data/{parsed,cleaned,monologues,pairs,stats}/SBCSAE/<stem>.*
 
 # 또는 단계별로 실행
 uv run scripttuner parse sbcsae datasets/sbcsae/SBC016.cha

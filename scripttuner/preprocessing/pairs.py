@@ -104,6 +104,7 @@ def convert_to_formal(
     *,
     client: LLMClient,
     model: str,
+    model_alias: str | None = None,
     cache_dir: Path | None = None,
     prompt_version: str = DEFAULT_PROMPT_VERSION,
     style: str = DEFAULT_STYLE,
@@ -115,8 +116,12 @@ def convert_to_formal(
         monologues: Input monologues. `monologue.text` may contain `<pause:*>` tokens;
             they are stripped before LLM call but preserved in `Pair.spoken_text`.
         client: LLM client implementing the `LLMClient` Protocol.
-        model: Model slug, used only as metadata + cache key component
-            (the actual model is selected by the client).
+        model: Raw model slug sent to the provider, recorded as ``metadata.model``.
+        model_alias: Identity used for the cache key in place of ``model``. Set to
+            a stable name shared across routing variants of the same weights
+            (e.g. ``openai/gpt-oss-120b:free`` vs ``openai/gpt-oss-120b:nitro``)
+            so the cache hits across routes. When ``None`` the raw ``model`` is
+            used as the cache key (legacy behavior).
         cache_dir: If provided, sha256-keyed disk cache directory. Cache hits skip
             the LLM call. Failures are not cached.
         prompt_version: Identifier embedded in pair_id and cache key. Bump when
@@ -128,6 +133,7 @@ def convert_to_formal(
         List of `Pair` for successfully converted monologues. Failed monologues
         (after client-internal retries) are skipped with a stderr log line.
     """
+    cache_key_id = model_alias if model_alias is not None else model
     mono_list = list(monologues)
     cache = DiskCache(cache_dir) if cache_dir is not None else None
     iterator: Iterable[Monologue] = (
@@ -137,7 +143,7 @@ def convert_to_formal(
     pairs: list[Pair] = []
     for mono in iterator:
         user_text = _strip_special_tokens(mono.text)
-        cache_key = make_cache_key(prompt_version, model, user_text)
+        cache_key = make_cache_key(prompt_version, cache_key_id, user_text)
 
         cached = cache.get(cache_key) if cache is not None else None
         if cached is not None:
@@ -166,6 +172,7 @@ def convert_to_formal(
         metadata = {
             **call_meta,
             "model": model,
+            "model_alias": cache_key_id,
             "prompt_version": prompt_version,
             "from_cache": from_cache,
         }

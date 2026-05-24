@@ -10,9 +10,10 @@ automatically recognizes:
 
 from __future__ import annotations
 
+import sys
 from typing import Any
 
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 from openai.types.chat import ChatCompletionMessageParam
 
 
@@ -22,6 +23,12 @@ class OpenAICompatibleClient:
     The SDK reads ``OPENAI_API_KEY`` and ``OPENAI_BASE_URL`` from the environment.
     Transient errors (429, 5xx, network) are retried by the SDK up to ``max_retries``
     times with exponential backoff. Permanent failures raise.
+
+    On 429 the response headers are dumped to stderr once per occurrence so that the
+    `X-RateLimit-Reset` unit can be confirmed during a real measurement run
+    (OpenRouter free-tier models do not send the standard `Retry-After` header that
+    the SDK auto-honors). The dump is diagnostic; precise header-driven retry is
+    implemented separately once the unit is confirmed.
     """
 
     def __init__(self, *, model: str, max_retries: int = 3) -> None:
@@ -33,10 +40,19 @@ class OpenAICompatibleClient:
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ]
-        resp = self._client.chat.completions.create(
-            model=self._model,
-            messages=messages,
-        )
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                messages=messages,
+            )
+        except RateLimitError as e:
+            response = getattr(e, "response", None)
+            if response is not None:
+                print(
+                    f"[llm] 429 RateLimit; response headers: {dict(response.headers)}",
+                    file=sys.stderr,
+                )
+            raise
         choice = resp.choices[0]
         content = choice.message.content
         if content is None:

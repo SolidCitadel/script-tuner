@@ -2,19 +2,18 @@
 
 > 본 문서는 **상태 추적용**이다. 일상적으로 업데이트한다. 정적 설계는 `docs/design/`, 결정 이력은 `docs/decisions/`(ADR), 거친 작업 메모는 `.work/`(gitignore)에 둔다.
 
-마지막 업데이트: 2026-05-23
+마지막 업데이트: 2026-05-24
 
 ---
 
 ## 마일스톤
 
-**M0~M12: PoC 전처리 파이프라인 완료** ✅
-SBC016 한 파일에 대해 `scripttuner run sbcsae SBC016` (parse → clean → monologue → pairs → stats) 단일 명령으로 end-to-end 검증. 자세한 진행 이력은 `git log` 및 아래 ADR 목록 참조.
+**M0~M13: PoC 전처리 파이프라인 + SBCSAE 60파일 배치 완료** ✅
+`scripttuner run sbcsae --all` 한 명령으로 60파일 end-to-end. 산출: `data/pairs/SBCSAE/_all.jsonl` (1,757 pairs / 131 speakers) + `data/stats/SBCSAE/_aggregate.json`. 자세한 진행 이력은 `git log` 및 아래 ADR 목록 참조.
 
 | # | 마일스톤 | 상태 | 비고 |
 |---|---|---|---|
-| M13 | SBCSAE 60개 확장 적용 | ⏳ 대기 | 한 corpus의 모든 .cha 배치 처리. 비용/시간/rate limit 정책 검토 |
-| — | 진단 모듈 / 변환 모델 / 백엔드 / UI | 미정 | 본 PoC 이후 |
+| — | 진단 모듈 / 변환 모델 / 백엔드 / UI | 미정 | 본 PoC 이후 — 모델 베이스 선택, 학습 파이프라인 |
 
 ## 결정 이력 (ADR)
 
@@ -29,7 +28,7 @@ SBC016 한 파일에 대해 `scripttuner run sbcsae SBC016` (parse → clean →
 
 ## 다음 액션 (단기)
 
-1. **M13 SBCSAE 60개 확장** — 60파일 배치 처리. 비용·시간·실패 처리 (skip + 재시도 정책) 검토 필요. PoC 단계의 한계 (rate limit, 단일 worker) 그대로 둘지 결정.
+1. 팀에 `_all.jsonl` + `_aggregate.json` 공유 → 학습 방법 검토 피드백 수렴.
 2. 본격 학습/모델 단계로 전환 — 변환 모델 베이스 선택, 진단 모듈, 학습 파이프라인.
 
 ## 보류 / 추후 결정

@@ -210,6 +210,51 @@ def test_cache_miss_on_different_model(tmp_path: Path) -> None:
     assert len(client.calls) == 2
 
 
+def test_alias_lets_different_models_share_cache(tmp_path: Path) -> None:
+    """Same alias across different raw model slugs → second call hits cache."""
+    monos = [_mono("m1", "hello")]
+    client = FakeLLMClient()
+    cache_dir = tmp_path / "cache"
+
+    convert_to_formal(
+        monos,
+        client=client,
+        model="provider-a/foo:free",
+        model_alias="foo",
+        cache_dir=cache_dir,
+        progress=False,
+    )
+    pairs = convert_to_formal(
+        monos,
+        client=client,
+        model="provider-b/foo:nitro",
+        model_alias="foo",
+        cache_dir=cache_dir,
+        progress=False,
+    )
+    assert len(client.calls) == 1  # second call was a cache hit
+    assert pairs[0].metadata["from_cache"] is True
+    # raw model on the returned Pair reflects the second invocation
+    assert pairs[0].metadata["model"] == "provider-b/foo:nitro"
+    assert pairs[0].metadata["model_alias"] == "foo"
+
+
+def test_alias_unset_defaults_to_raw_model_for_cache_key(tmp_path: Path) -> None:
+    """When alias is None the raw model is the cache key (legacy behavior)."""
+    monos = [_mono("m1", "hello")]
+    client = FakeLLMClient()
+    cache_dir = tmp_path / "cache"
+
+    convert_to_formal(monos, client=client, model="m-x", cache_dir=cache_dir, progress=False)
+    convert_to_formal(monos, client=client, model="m-y", cache_dir=cache_dir, progress=False)
+    assert len(client.calls) == 2  # different raw models, no alias → miss
+    pairs = convert_to_formal(
+        monos, client=client, model="m-x", cache_dir=cache_dir, progress=False
+    )
+    assert len(client.calls) == 2  # third call hits m-x cache
+    assert pairs[0].metadata["model_alias"] == "m-x"
+
+
 def test_cache_miss_on_different_prompt_version(tmp_path: Path) -> None:
     monos = [_mono("m1", "hello")]
     client = FakeLLMClient()

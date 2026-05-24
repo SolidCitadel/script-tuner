@@ -25,6 +25,7 @@ from dotenv import load_dotenv
 
 from scripttuner.data_sources import sbcsae
 from scripttuner.llm.openai_compatible import OpenAICompatibleClient
+from scripttuner.llm.openrouter import OpenRouterClient
 from scripttuner.persistence.jsonl import read_jsonl, write_jsonl
 from scripttuner.preprocessing.chat import cleaner as chat_cleaner
 from scripttuner.preprocessing.chat import parser as chat_parser
@@ -116,6 +117,16 @@ def _build_parser() -> argparse.ArgumentParser:
         help="LLM model slug (required unless LLM_MODEL env is set).",
     )
     pa.add_argument(
+        "--model-alias",
+        default=os.environ.get("LLM_MODEL_ALIAS"),
+        help=(
+            "Cache-key identity. Use a stable name shared across routing variants "
+            "of the same weights (e.g. omit `:free`/`:nitro` suffixes) so the "
+            "cache hits across routes. Defaults to LLM_MODEL_ALIAS env, then to "
+            "--model when unset (legacy behavior)."
+        ),
+    )
+    pa.add_argument(
         "--style",
         default=DEFAULT_STYLE,
         help=f"Style label for produced pairs (default: {DEFAULT_STYLE}).",
@@ -177,12 +188,40 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Skip POS-based stats (lexical density, phrasal verbs).",
     )
 
+    ag = subparsers.add_parser(
+        "aggregate",
+        help="Concat per-stem Pair JSONLs into _all.jsonl + corpus-wide stats.",
+    )
+    ag.add_argument("corpus", choices=sorted(CORPORA), help="Corpus name.")
+    ag.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help=f"Base data directory (default: {DEFAULT_DATA_DIR}).",
+    )
+    ag.add_argument(
+        "--no-pos",
+        action="store_true",
+        help="Skip POS-based stats in the aggregate.",
+    )
+
     rn = subparsers.add_parser(
         "run",
-        help="End-to-end pipeline for one file: parse > clean > monologue > pairs > stats.",
+        help="End-to-end pipeline: parse > clean > monologue > pairs > stats. "
+        "Accepts one or more stems, or --all for every .cha under the corpus dir.",
     )
     rn.add_argument("corpus", choices=sorted(CORPORA), help="Corpus name.")
-    rn.add_argument("stem", help="File stem (e.g. SBC016).")
+    rn.add_argument(
+        "stems",
+        nargs="*",
+        help="One or more file stems (e.g. SBC016 SBC017). Omit when using --all.",
+    )
+    rn.add_argument(
+        "--all",
+        dest="all_stems",
+        action="store_true",
+        help="Process every .cha file under <datasets-dir>/<corpus>/.",
+    )
     rn.add_argument(
         "--datasets-dir",
         type=Path,
@@ -199,6 +238,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--model",
         default=os.environ.get("LLM_MODEL"),
         help="LLM model slug (required unless LLM_MODEL env is set).",
+    )
+    rn.add_argument(
+        "--model-alias",
+        default=os.environ.get("LLM_MODEL_ALIAS"),
+        help="Cache-key identity (env LLM_MODEL_ALIAS). See `pairs` subcommand for details.",
     )
     rn.add_argument("--min-tokens", type=int, default=DEFAULT_MIN_TOKENS)
     rn.add_argument("--limit", type=int, default=None, help="Limit pairs to first N monologues.")
@@ -258,6 +302,23 @@ def _run_monologue(args: argparse.Namespace) -> int:
     return 0
 
 
+def _build_llm_client(
+    model: str, max_retries: int
+) -> OpenAICompatibleClient | OpenRouterClient:
+    """Pick an LLM client based on the configured base URL.
+
+    OpenRouter free-tier models need header-aware RPM-cap recovery that the SDK
+    does not provide; we auto-route to `OpenRouterClient` when the configured
+    base URL points at openrouter.ai. Any other endpoint (OpenAI, Together,
+    Groq, local vLLM, etc.) keeps the plain `OpenAICompatibleClient` with the
+    SDK's built-in retry semantics.
+    """
+    base_url = os.environ.get("OPENAI_BASE_URL", "")
+    if "openrouter.ai" in base_url:
+        return OpenRouterClient(model=model)
+    return OpenAICompatibleClient(model=model, max_retries=max_retries)
+
+
 def _run_pairs(args: argparse.Namespace) -> int:
     if not args.model:
         print(
@@ -277,11 +338,12 @@ def _run_pairs(args: argparse.Namespace) -> int:
     else:
         cache_dir = args.cache_dir or (args.data_dir / "cache" / "pairs")
 
-    client = OpenAICompatibleClient(model=args.model, max_retries=args.max_retries)
+    client = _build_llm_client(args.model, args.max_retries)
     pairs = convert_to_formal(
         monologues,
         client=client,
         model=args.model,
+        model_alias=args.model_alias,
         cache_dir=cache_dir,
         prompt_version=args.prompt_version,
         style=args.style,
@@ -306,10 +368,70 @@ def _run_stats(args: argparse.Namespace) -> int:
     return 0
 
 
-def _run_run(args: argparse.Namespace) -> int:
-    """End-to-end pipeline orchestrator. Reuses per-stage _run_* via argparse.Namespace."""
+def _run_aggregate(args: argparse.Namespace) -> int:
+    """Concat per-stem Pair JSONLs and compute corpus-wide stats.
+
+    Writes two outputs:
+      data/pairs/<SOURCE>/_all.jsonl     — all pairs concatenated
+      data/stats/<SOURCE>/_aggregate.json — stats over _all.jsonl
+
+    Files prefixed with ``_`` (incl. the previous _all.jsonl) are excluded from
+    the input glob to keep aggregation idempotent.
+    """
     source = _source_name(args.corpus)
-    cha_path = args.datasets_dir / args.corpus / f"{args.stem}.cha"
+    pairs_dir = args.data_dir / "pairs" / source
+    if not pairs_dir.is_dir():
+        print(f"error: pairs dir not found: {pairs_dir}", file=sys.stderr)
+        return 1
+
+    stem_paths = sorted(p for p in pairs_dir.glob("*.jsonl") if not p.name.startswith("_"))
+    if not stem_paths:
+        print(f"error: no per-stem pair jsonls under {pairs_dir}", file=sys.stderr)
+        return 1
+
+    pairs: list[Pair] = []
+    for path in stem_paths:
+        pairs.extend(read_jsonl(path, Pair))
+
+    all_path = pairs_dir / "_all.jsonl"
+    write_jsonl(all_path, pairs)
+    print(f"OK: wrote {len(pairs)} pairs to {all_path}", file=sys.stderr)
+
+    stats_dir = args.data_dir / "stats" / source
+    stats_dir.mkdir(parents=True, exist_ok=True)
+    result = compute_stats(pairs, include_pos=not args.no_pos)
+    agg_path = stats_dir / "_aggregate.json"
+    agg_path.write_text(json.dumps(result, indent=2, ensure_ascii=False), encoding="utf-8")
+    print(f"OK: wrote aggregate stats for {result['n_pairs']} pairs to {agg_path}")
+    return 0
+
+
+def _resolve_run_stems(args: argparse.Namespace) -> tuple[list[str], int]:
+    """Resolve the stem list for `run` from positional stems or --all.
+
+    Returns (stems, rc). rc=0 on success; rc=2 on argument conflict; rc=1 when
+    --all finds no .cha files in the corpus directory.
+    """
+    if bool(args.stems) == bool(args.all_stems):
+        print(
+            "error: provide either one or more stems OR --all (not both, not neither).",
+            file=sys.stderr,
+        )
+        return [], 2
+    if args.all_stems:
+        cha_dir = args.datasets_dir / args.corpus
+        stems = sorted(p.stem for p in cha_dir.glob("*.cha"))
+        if not stems:
+            print(f"error: no .cha files found under {cha_dir}", file=sys.stderr)
+            return [], 1
+        return stems, 0
+    return list(args.stems), 0
+
+
+def _run_single_stem(stem: str, args: argparse.Namespace) -> int:
+    """Process one stem through parse → clean → monologue → pairs → stats."""
+    source = _source_name(args.corpus)
+    cha_path = args.datasets_dir / args.corpus / f"{stem}.cha"
     if not cha_path.exists():
         print(
             f"error: input not found: {cha_path}\n"
@@ -319,17 +441,17 @@ def _run_run(args: argparse.Namespace) -> int:
         return 1
 
     base: dict[str, object] = {"corpus": args.corpus, "data_dir": args.data_dir}
-
     stages: list[tuple[str, dict[str, object]]] = [
         ("parse", {**base, "input_path": cha_path}),
-        ("clean", {**base, "stem": args.stem}),
-        ("monologue", {**base, "stem": args.stem, "min_tokens": args.min_tokens}),
+        ("clean", {**base, "stem": stem}),
+        ("monologue", {**base, "stem": stem, "min_tokens": args.min_tokens}),
         (
             "pairs",
             {
                 **base,
-                "stem": args.stem,
+                "stem": stem,
                 "model": args.model,
+                "model_alias": args.model_alias,
                 "style": DEFAULT_STYLE,
                 "prompt_version": DEFAULT_PROMPT_VERSION,
                 "cache_dir": None,
@@ -339,19 +461,42 @@ def _run_run(args: argparse.Namespace) -> int:
                 "limit": args.limit,
             },
         ),
-        ("stats", {**base, "stem": args.stem, "no_pos": args.no_pos}),
+        ("stats", {**base, "stem": stem, "no_pos": args.no_pos}),
     ]
     for name, kwargs in stages:
-        print(f"[run] {name} {args.corpus} {args.stem}", file=sys.stderr)
+        print(f"[run] {name} {args.corpus} {stem}", file=sys.stderr)
         rc = _COMMANDS[name](argparse.Namespace(**kwargs))
         if rc != 0:
             print(f"[run] {name} failed with rc={rc}", file=sys.stderr)
             return rc
     print(
-        f"[run] complete: data/stats/{source}/{args.stem}.json",
+        f"[run] complete: data/stats/{source}/{stem}.json",
         file=sys.stderr,
     )
     return 0
+
+
+def _run_run(args: argparse.Namespace) -> int:
+    """End-to-end orchestrator. Multi-stem aware; per-stem failures are isolated."""
+    stems, rc = _resolve_run_stems(args)
+    if rc != 0:
+        return rc
+
+    succeeded: list[str] = []
+    failed: list[str] = []
+    for stem in stems:
+        if _run_single_stem(stem, args) == 0:
+            succeeded.append(stem)
+        else:
+            failed.append(stem)
+
+    multi = len(stems) > 1 or args.all_stems
+    if multi:
+        summary = f"[run] summary: {len(succeeded)}/{len(stems)} succeeded"
+        if failed:
+            summary += f"; failed: {', '.join(failed)}"
+        print(summary, file=sys.stderr)
+    return 1 if failed else 0
 
 
 _COMMANDS = {
@@ -361,6 +506,7 @@ _COMMANDS = {
     "monologue": _run_monologue,
     "pairs": _run_pairs,
     "stats": _run_stats,
+    "aggregate": _run_aggregate,
     "run": _run_run,
 }
 
