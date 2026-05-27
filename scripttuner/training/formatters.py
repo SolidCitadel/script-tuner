@@ -4,35 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 from scripttuner.persistence.jsonl import read_jsonl
 from scripttuner.preprocessing.ir import Pair
+from scripttuner.training.registry import FormatKind, model_format_kind
 from scripttuner.training.style import STYLE_SPECS, get_style_spec
-
-CHAT_MODEL_KEYS: frozenset[str] = frozenset(
-    {
-        "gemma4-e4b",
-        "gemma4-e2b",
-        "qwen3-4b",
-        "qwen3-1.7b",
-    }
-)
-SEQ2SEQ_MODEL_KEYS: frozenset[str] = frozenset({"t5gemma2"})
-MODEL_KEYS: frozenset[str] = CHAT_MODEL_KEYS | SEQ2SEQ_MODEL_KEYS
-
-FormatKind = Literal["chat", "seq2seq"]
-
-
-def model_format_kind(model_key: str) -> FormatKind:
-    """Return the fine-tuning data shape for a model key."""
-
-    if model_key in CHAT_MODEL_KEYS:
-        return "chat"
-    if model_key in SEQ2SEQ_MODEL_KEYS:
-        return "seq2seq"
-    supported = ", ".join(sorted(MODEL_KEYS))
-    raise ValueError(f"Unsupported model key {model_key!r}. Supported models: {supported}")
 
 
 def format_split_folder(

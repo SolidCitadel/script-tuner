@@ -8,6 +8,9 @@ dependencies = [
     "python-dotenv>=1.0",
     "tqdm>=4.66",
     "spacy>=3.7",
+    # spaCy English model for POS-based stats (module ⑤). Declared so `uv sync` keeps it;
+    # it was previously installed ad-hoc via `spacy download`, which any sync would wipe.
+    "en_core_web_sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl",
 ]
 
 [project.scripts]
@@ -20,6 +23,15 @@ dev = [
     "mypy>=1.11",
     "types-tqdm>=4.66",
 ]
+# Local QLoRA fine-tuning stack. Unsloth wraps transformers/peft/trl/bitsandbytes/accelerate.
+# Heavy + GPU/CUDA-specific, so it is kept out of the core deps. Install with:
+#   uv sync --group train
+# On Windows, Triton ships as `triton-windows`; torch is pulled from the cu128 index below.
+train = [
+    "torch>=2.4",
+    "unsloth",
+    "triton-windows ; sys_platform == 'win32'",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -27,6 +39,20 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["scripttuner"]
+
+# Required because en_core_web_sm is declared as a direct URL reference (see [project].dependencies).
+[tool.hatch.metadata]
+allow-direct-references = true
+
+# torch CUDA wheels are not on default PyPI; route torch through the cu128 build
+# (works on our CUDA 13.2 driver via backward compat; cuDNN on Windows needs cu126/128/129).
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
 
 [tool.ruff]
 line-length = 100
@@ -46,6 +72,23 @@ select = [
 python_version = "3.11"
 strict = true
 warn_unused_configs = true
+
+# ML libraries ship without (usable) type stubs; don't let strict mode analyze them.
+# follow_imports=skip treats their symbols as Any (avoids attr-defined / implicit-reexport noise).
+[[tool.mypy.overrides]]
+module = [
+    "unsloth", "unsloth.*",
+    "unsloth_zoo", "unsloth_zoo.*",
+    "transformers", "transformers.*",
+    "peft", "peft.*",
+    "trl", "trl.*",
+    "torch", "torch.*",
+    "datasets", "datasets.*",
+    "bitsandbytes", "bitsandbytes.*",
+    "triton", "triton.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

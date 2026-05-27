@@ -77,10 +77,10 @@ def test_format_subcommand_writes_seq2seq_data(tmp_path: Path) -> None:
     for split_name in ("train", "validation", "test"):
         write_jsonl(splits_dir / f"{split_name}.jsonl", [_pair(f"{split_name}-1", "A")])
 
-    rc = cli.main(["format", "t5gemma2", "sbcsae", "--data-dir", str(data_dir)])
+    rc = cli.main(["format", "t5gemma2-270m", "sbcsae", "--data-dir", str(data_dir)])
     assert rc == 0
 
-    out_path = data_dir / "finetune" / "SBCSAE" / "formatted" / "t5gemma2" / "train.jsonl"
+    out_path = data_dir / "finetune" / "SBCSAE" / "formatted" / "t5gemma2-270m" / "train.jsonl"
     row = json.loads(out_path.read_text(encoding="utf-8").splitlines()[0])
     assert row["input"].startswith("<style:casual>")
     assert row["target"].startswith("Well,")

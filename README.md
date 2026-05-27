@@ -90,9 +90,17 @@ uv run mypy scripttuner tests
 
 ### spaCy 영어 모델 (stats 모듈의 POS 지표용)
 
+`en_core_web_sm`은 의존성으로 선언돼 있어 `uv sync` 시 자동 설치된다 (별도 다운로드 불필요).
+
+### 파인튜닝 학습 의존성 (optional `train` 그룹)
+
+QLoRA 파인튜닝 스택(Unsloth + torch)은 무겁고 GPU 종속이라 core가 아닌 optional 그룹이다.
+
 ```bash
-uv run python -m spacy download en_core_web_sm
+uv sync --group train
 ```
+
+> ⚠️ 이후 동기화는 `uv sync --group train`으로 할 것. 그냥 `uv sync`를 돌리면 학습 의존성(torch/unsloth 등)이 **제거된다**.
 
 ### LLM provider 설정
 

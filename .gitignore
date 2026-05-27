@@ -31,3 +31,5 @@ Thumbs.db
 .claude/
 data/
 datasets/
+runs/
+unsloth_compiled_cache/

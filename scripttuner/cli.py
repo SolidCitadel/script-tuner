@@ -35,7 +35,8 @@ from scripttuner.preprocessing.pairs import (
     convert_to_formal,
 )
 from scripttuner.preprocessing.stats import compute_stats
-from scripttuner.training.formatters import MODEL_KEYS, format_split_folder
+from scripttuner.training.formatters import format_split_folder
+from scripttuner.training.registry import MODEL_KEYS
 from scripttuner.training.split import split_by_speaker, write_split_files
 
 DEFAULT_DATASETS_DIR = Path("datasets")
@@ -270,6 +271,90 @@ def _build_parser() -> argparse.ArgumentParser:
             "(default: <data-dir>/finetune/<SOURCE>/formatted/<model_key>)."
         ),
     )
+
+    tr = subparsers.add_parser(
+        "train",
+        help="QLoRA fine-tune a chat model (Unsloth) on formatted splits.",
+    )
+    tr.add_argument("model_key", choices=sorted(MODEL_KEYS), help="Target model key.")
+    tr.add_argument("corpus", choices=sorted(REGISTRY), help="Corpus name.")
+    tr.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help=f"Base data directory (default: {DEFAULT_DATA_DIR}).",
+    )
+    tr.add_argument(
+        "--formatted-dir",
+        type=Path,
+        default=None,
+        help="Formatted split dir (default: <data-dir>/finetune/<SOURCE>/formatted/<model_key>).",
+    )
+    tr.add_argument(
+        "--run-name", default=None, help="Run name (default: <model_key>-<SOURCE>-lora)."
+    )
+    tr.add_argument(
+        "--output-dir",
+        type=Path,
+        default=None,
+        help="Output dir (default: runs/finetune/<run-name>).",
+    )
+    tr.add_argument("--max-seq-length", type=int, default=2048)
+    tr.add_argument("--lora-r", type=int, default=16)
+    tr.add_argument("--lora-alpha", type=int, default=16)
+    tr.add_argument("--lora-dropout", type=float, default=0.0)
+    tr.add_argument("--epochs", type=float, default=1.0)
+    tr.add_argument(
+        "--max-steps",
+        type=int,
+        default=None,
+        help="Stop after N steps instead of epochs (smoke/quick runs).",
+    )
+    tr.add_argument("--batch-size", type=int, default=2)
+    tr.add_argument("--grad-accum", type=int, default=4)
+    tr.add_argument("--learning-rate", type=float, default=2e-4)
+    tr.add_argument("--seed", type=int, default=42)
+
+    gn = subparsers.add_parser(
+        "generate",
+        help="Generate predictions from a trained adapter on a formatted split.",
+    )
+    gn.add_argument("model_key", choices=sorted(MODEL_KEYS), help="Target model key.")
+    gn.add_argument("corpus", choices=sorted(REGISTRY), help="Corpus name.")
+    gn.add_argument(
+        "--data-dir",
+        type=Path,
+        default=DEFAULT_DATA_DIR,
+        help=f"Base data directory (default: {DEFAULT_DATA_DIR}).",
+    )
+    gn.add_argument(
+        "--run-name", default=None, help="Run name (default: <model_key>-<SOURCE>-lora)."
+    )
+    gn.add_argument(
+        "--adapter-dir",
+        type=Path,
+        default=None,
+        help="Adapter dir (default: runs/finetune/<run-name>/adapter).",
+    )
+    gn.add_argument(
+        "--formatted-dir",
+        type=Path,
+        default=None,
+        help="Formatted split dir (default: <data-dir>/finetune/<SOURCE>/formatted/<model_key>).",
+    )
+    gn.add_argument(
+        "--output",
+        type=Path,
+        default=None,
+        help="Predictions JSONL (default: runs/eval/<run-name>/predictions.jsonl).",
+    )
+    gn.add_argument(
+        "--split", default="test", choices=["train", "validation", "test"], help="Split to run."
+    )
+    gn.add_argument("--limit", type=int, default=None, help="Only generate for the first N rows.")
+    gn.add_argument("--max-new-tokens", type=int, default=256)
+    gn.add_argument("--batch-size", type=int, default=8)
+    gn.add_argument("--max-seq-length", type=int, default=2048)
 
     rn = subparsers.add_parser(
         "run",
@@ -522,6 +607,61 @@ def _run_format(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_train(args: argparse.Namespace) -> int:
+    # Lazy import: Unsloth/torch are heavy and only needed for this command.
+    from scripttuner.training.train import run_finetune
+
+    source = _source_name(args.corpus)
+    formatted_dir = args.formatted_dir or (
+        args.data_dir / "finetune" / source / "formatted" / args.model_key
+    )
+    run_name = args.run_name or f"{args.model_key}-{source}-lora"
+    output_dir = args.output_dir or (Path("runs") / "finetune" / run_name)
+    manifest = run_finetune(
+        model_key=args.model_key,
+        formatted_dir=formatted_dir,
+        output_dir=output_dir,
+        max_seq_length=args.max_seq_length,
+        lora_r=args.lora_r,
+        lora_alpha=args.lora_alpha,
+        lora_dropout=args.lora_dropout,
+        epochs=args.epochs,
+        max_steps=args.max_steps,
+        batch_size=args.batch_size,
+        grad_accum=args.grad_accum,
+        learning_rate=args.learning_rate,
+        seed=args.seed,
+    )
+    print(f"OK: trained {args.model_key} -> {output_dir} (adapter: {manifest['adapter_dir']})")
+    return 0
+
+
+def _run_generate(args: argparse.Namespace) -> int:
+    # Lazy import: torch/transformers are heavy and only needed for this command.
+    from scripttuner.training.generate import run_generate
+
+    source = _source_name(args.corpus)
+    run_name = args.run_name or f"{args.model_key}-{source}-lora"
+    adapter_dir = args.adapter_dir or (Path("runs") / "finetune" / run_name / "adapter")
+    formatted_dir = args.formatted_dir or (
+        args.data_dir / "finetune" / source / "formatted" / args.model_key
+    )
+    output_path = args.output or (Path("runs") / "eval" / run_name / "predictions.jsonl")
+    summary = run_generate(
+        model_key=args.model_key,
+        adapter_dir=adapter_dir,
+        formatted_dir=formatted_dir,
+        output_path=output_path,
+        split=args.split,
+        max_new_tokens=args.max_new_tokens,
+        batch_size=args.batch_size,
+        max_seq_length=args.max_seq_length,
+        limit=args.limit,
+    )
+    print(f"OK: wrote {summary['n']} predictions to {output_path}")
+    return 0
+
+
 def _resolve_run_stems(args: argparse.Namespace) -> tuple[list[str], int]:
     """Resolve the stem list for `run` from positional stems or --all.
 
@@ -632,6 +772,8 @@ _COMMANDS = {
     "aggregate": _run_aggregate,
     "split": _run_split,
     "format": _run_format,
+    "train": _run_train,
+    "generate": _run_generate,
     "run": _run_run,
 }
 
