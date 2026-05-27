@@ -11,7 +11,6 @@ from typing import Any
 
 from scripttuner.preprocessing.ir import Pair
 
-
 SplitMap = dict[str, list[Pair]]
 
 

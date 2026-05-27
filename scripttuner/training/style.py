@@ -18,7 +18,7 @@ class StyleSpec:
 STYLE_SPECS: dict[str, StyleSpec] = {
     "casual": StyleSpec(
         label="casual",
-        control_token="<STYLE=casual>",
+        control_token="<style:casual>",
         instruction=(
             "Rewrite the input into natural casual spoken English. Preserve the "
             "meaning, use conversational phrasing, and avoid sounding like a "
@@ -31,7 +31,7 @@ STYLE_SPECS: dict[str, StyleSpec] = {
     ),
     "semi_formal": StyleSpec(
         label="semi_formal",
-        control_token="<STYLE=semi_formal>",
+        control_token="<style:semi_formal>",
         instruction=(
             "Rewrite the input into clear semi-formal spoken English suitable for "
             "an English speaking test. Preserve the meaning and make it sound "

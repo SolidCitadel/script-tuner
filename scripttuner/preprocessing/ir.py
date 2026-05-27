@@ -87,7 +87,7 @@ class Pair:
     """Corpus identifier (e.g. 'SBCSAE')."""
 
     style: str
-    """Style label (e.g. 'casual', 'semi-formal'). cf. ADR-0005."""
+    """Style label (e.g. 'casual', 'semi_formal'). cf. ADR-0005."""
 
     speaker: str
     """Speaker identifier."""

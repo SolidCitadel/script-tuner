@@ -57,8 +57,8 @@ seq2seq format.
 Style control is represented with explicit control tokens:
 
 ```text
-<STYLE=casual>
-<STYLE=semi_formal>
+<style:casual>
+<style:semi_formal>
 ```
 
 The token is included at the beginning of every training input. The formatter

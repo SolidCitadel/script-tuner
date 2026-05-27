@@ -66,9 +66,9 @@ def test_format_subcommand_writes_chat_data(tmp_path: Path) -> None:
     out_path = data_dir / "finetune" / "SBCSAE" / "formatted" / "gemma4-e4b" / "train.jsonl"
     row = json.loads(out_path.read_text(encoding="utf-8").splitlines()[0])
     assert row["messages"][0]["role"] == "user"
-    assert "<STYLE=casual>" in row["messages"][0]["content"]
+    assert "<style:casual>" in row["messages"][0]["content"]
     assert row["messages"][1]["role"] == "assistant"
-    assert row["style_token"] == "<STYLE=casual>"
+    assert row["style_token"] == "<style:casual>"
 
 
 def test_format_subcommand_writes_seq2seq_data(tmp_path: Path) -> None:
@@ -82,5 +82,5 @@ def test_format_subcommand_writes_seq2seq_data(tmp_path: Path) -> None:
 
     out_path = data_dir / "finetune" / "SBCSAE" / "formatted" / "t5gemma2" / "train.jsonl"
     row = json.loads(out_path.read_text(encoding="utf-8").splitlines()[0])
-    assert row["input"].startswith("<STYLE=casual>")
+    assert row["input"].startswith("<style:casual>")
     assert row["target"].startswith("Well,")
