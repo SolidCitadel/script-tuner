@@ -25,6 +25,8 @@ def run_generate(
     batch_size: int = 8,
     max_seq_length: int = 2048,
     limit: int | None = None,
+    repetition_penalty: float = 1.0,
+    no_repeat_ngram_size: int = 0,
 ) -> dict[str, Any]:
     """어댑터를 base 위에 올려 split을 추론하고 predictions.jsonl을 쓴다."""
 
@@ -71,7 +73,12 @@ def run_generate(
                 max_length=max_seq_length,
             ).to(device)
             with torch.no_grad():
-                generated = model.generate(**inputs, max_new_tokens=max_new_tokens)
+                generated = model.generate(
+                    **inputs,
+                    max_new_tokens=max_new_tokens,
+                    repetition_penalty=repetition_penalty,
+                    no_repeat_ngram_size=no_repeat_ngram_size,
+                )
             predictions = tokenizer.batch_decode(generated, skip_special_tokens=True)
             for row, prediction in zip(batch, predictions, strict=True):
                 out_row = {

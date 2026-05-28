@@ -355,6 +355,8 @@ def _build_parser() -> argparse.ArgumentParser:
     gn.add_argument("--max-new-tokens", type=int, default=256)
     gn.add_argument("--batch-size", type=int, default=8)
     gn.add_argument("--max-seq-length", type=int, default=2048)
+    gn.add_argument("--repetition-penalty", type=float, default=1.0)
+    gn.add_argument("--no-repeat-ngram-size", type=int, default=0)
 
     ev = subparsers.add_parser(
         "evaluate",
@@ -674,6 +676,8 @@ def _run_generate(args: argparse.Namespace) -> int:
         batch_size=args.batch_size,
         max_seq_length=args.max_seq_length,
         limit=args.limit,
+        repetition_penalty=args.repetition_penalty,
+        no_repeat_ngram_size=args.no_repeat_ngram_size,
     )
     print(f"OK: wrote {summary['n']} predictions to {output_path}")
     return 0
