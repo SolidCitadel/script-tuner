@@ -249,17 +249,27 @@ def _train_seq2seq(
         target_modules="all-linear",
     )
     model = get_peft_model(model, peft_config)
+    # gradient checkpointing이 PEFT(동결 base + LoRA)에서 동작하려면 입력이 grad를 요구해야 한다.
+    model.enable_input_require_grads()
 
     data_files = {"train": str(train_path)}
     if val_path is not None:
         data_files["validation"] = str(val_path)
     ds = load_dataset("json", data_files=data_files)
 
+    eos_id = tokenizer.eos_token_id
+
     def _tokenize(batch: dict[str, Any]) -> dict[str, Any]:
         model_inputs: dict[str, Any] = dict(
             tokenizer(batch["input"], max_length=max_seq_length, truncation=True)
         )
-        labels = tokenizer(text_target=batch["target"], max_length=max_seq_length, truncation=True)
+        # T5Gemma2 tokenizer는 text_target에 EOS를 자동 추가하지 않는다 — 라벨 끝에 EOS가
+        # 없으면 모델이 종료 시점을 학습하지 못해 생성 시 tail이 degenerate한다.
+        # max_length-1로 truncate한 뒤 EOS를 붙여 최종 시퀀스가 한도를 넘지 않게 한다.
+        labels = tokenizer(
+            text_target=batch["target"], max_length=max_seq_length - 1, truncation=True
+        )
+        labels["input_ids"] = [ids + [eos_id] for ids in labels["input_ids"]]
         model_inputs["labels"] = labels["input_ids"]
         return model_inputs
 
@@ -279,6 +289,8 @@ def _train_seq2seq(
         logging_steps=1,
         optim="adamw_torch",
         bf16=True,
+        gradient_checkpointing=True,
+        gradient_checkpointing_kwargs={"use_reentrant": False},
         seed=seed,
         report_to="none",
         **duration,
