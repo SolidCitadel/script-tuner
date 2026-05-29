@@ -17,7 +17,7 @@ from scripttuner.training.registry import get_model_spec, require_hf_id
 def run_generate(
     *,
     model_key: str,
-    adapter_dir: Path,
+    adapter_dir: str | Path,
     formatted_dir: Path,
     output_path: Path,
     split: str = "test",

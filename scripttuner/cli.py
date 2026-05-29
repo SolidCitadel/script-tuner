@@ -332,9 +332,9 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     gn.add_argument(
         "--adapter-dir",
-        type=Path,
         default=None,
-        help="Adapter dir (default: runs/finetune/<run-name>/adapter).",
+        help="Local adapter dir or an HF repo id "
+        "(default: runs/finetune/<run-name>/adapter).",
     )
     gn.add_argument(
         "--formatted-dir",
